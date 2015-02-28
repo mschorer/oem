@@ -1,11 +1,6 @@
-emonHub
+oem
 =======
 
-Development branch
-------------------
-
-My additions to emonhub:
-
-- add a "fifo" interfacer
-
-[Visit emonHub Documentation !](http://emonhub.org)
+- handles reception of OEM packets via a RF24 based wireless link.
+- logs to syslog
+- writes to a fifo-special-file
