@@ -28,6 +28,8 @@
 
 #define PID_FILE "/var/run/oem.pid"
 
+#define PIPE_SNS	1
+
 using namespace std;
 
 RF24 radio(RPI_V2_GPIO_P1_22, RPI_V2_GPIO_P1_24, BCM2835_SPI_SPEED_8MHZ);  
@@ -38,13 +40,13 @@ RF24 radio(RPI_V2_GPIO_P1_22, RPI_V2_GPIO_P1_24, BCM2835_SPI_SPEED_8MHZ);
 // Channel info
 //
 //const uint8_t num_channels = 128;
-const uint8_t num_channels = 120;
-uint8_t values[num_channels];
+//const uint8_t num_channels = 120;
+//uint8_t values[num_channels];
 
-const uint8_t pipes[][6] = { "1emon", "2emon", "3emon", "4emon", "5emon", "6emon", };
+const uint8_t pipes[][6] = { "0emon", "1emon", "2emon", "3emon", "4emon", "5emon" };
 
-const int num_reps = 100;
-int reset_array=0;
+//const int num_reps = 100;
+//int reset_array=0;
 
 sStatus oem;
 //oem_packet rx_buffer, tx_buffer;
@@ -58,38 +60,40 @@ int ph;
 
 //--------------------------------------------------------------------------------
 
-void updateEnergy( oem_energy *nrg) {
+void updateEnergy( uint8_t pipe, oem_energy *nrg) {
     char buffer[80];
     time_t now = time(0);
     
-    syslog( LOG_NOTICE, "NRG: #[%010d]  P1[%10d]Wh  P2[%10d]Wh  P3[%10d]Wh    PA[%10d]Wh    TOTAL[%10d]kWh\n", nrg->timestamp+nrg->duration, nrg->wh_CT1, nrg->wh_CT2, nrg->wh_CT3, nrg->wh_CT4, ( nrg->wh_CT1+nrg->wh_CT2+nrg->wh_CT3+nrg->wh_CT4) / 1000);
-    if ( !daemonize) printf( "NRG: #[%010d]  P1[%10d]Wh  P2[%10d]Wh  P3[%10d]Wh    PA[%10d]Wh    TOTAL[%10d]kWh\n", nrg->timestamp+nrg->duration, nrg->wh_CT1, nrg->wh_CT2, nrg->wh_CT3, nrg->wh_CT4, ( nrg->wh_CT1+nrg->wh_CT2+nrg->wh_CT3+nrg->wh_CT4) / 1000);
+    if ( !daemonize) printf( "NRG[%i]: #[%010d]  P1[%10d]Wh  P2[%10d]Wh  P3[%10d]Wh    PA[%10d]Wh    TOTAL[%10d]kWh\n", pipe, nrg->timestamp+nrg->duration, nrg->wh_CT1, nrg->wh_CT2, nrg->wh_CT3, nrg->wh_CT4, ( nrg->wh_CT1+nrg->wh_CT2+nrg->wh_CT3+nrg->wh_CT4) / 1000);
     
-    if ( now - e_ts > 59) {
+    if ( pipe == PIPE_SNS && now - e_ts > 59) {
       e_ts = now;
       
       if ( ph <= 0) ph = open( "/var/run/emon", O_WRONLY | O_NONBLOCK);
       if ( ph > 0) {
-        sprintf( buffer, "%i %d %d %d %d %d\n", 10, nrg->duration, nrg->wh_CT1, nrg->wh_CT2, nrg->wh_CT3, nrg->wh_CT4);      
+        sprintf( buffer, "%i %d %d %d %d %d\n", 10, nrg->timestamp+nrg->duration, nrg->wh_CT1, nrg->wh_CT2, nrg->wh_CT3, nrg->wh_CT4);      
         if ( -1 == write( ph, buffer, strlen( buffer))) ph = -1;
+      } else {
+        syslog( LOG_NOTICE, "NRG: #[%010d]  P1[%10d]Wh  P2[%10d]Wh  P3[%10d]Wh    PA[%10d]Wh    TOTAL[%10d]kWh\n", nrg->timestamp+nrg->duration, nrg->wh_CT1, nrg->wh_CT2, nrg->wh_CT3, nrg->wh_CT4, ( nrg->wh_CT1+nrg->wh_CT2+nrg->wh_CT3+nrg->wh_CT4) / 1000);
       }
     }
 }
 
-void updatePower( oem_power *pwr) {
+void updatePower( uint8_t pipe, oem_power *pwr) {
     char buffer[80];
     time_t now = time(0);
 
-    syslog( LOG_NOTICE, "POW:        [%3dV]  P1[%10d]W   P2[%10d]W   P3[%10d]W     PA[%10d]W     TOTAL[%10u]W\n", pwr->voltage, pwr->realPower_CT1, pwr->realPower_CT2, pwr->realPower_CT3, pwr->realPower_CT4, pwr->realPower_CT1+pwr->realPower_CT2+pwr->realPower_CT3+pwr->realPower_CT4);
-    if ( !daemonize) printf( "POW:        [%3dV]  P1[%10d]W   P2[%10d]W   P3[%10d]W     PA[%10d]W     TOTAL[%10u]W\n", pwr->voltage, pwr->realPower_CT1, pwr->realPower_CT2, pwr->realPower_CT3, pwr->realPower_CT4, pwr->realPower_CT1+pwr->realPower_CT2+pwr->realPower_CT3+pwr->realPower_CT4);
+    if ( !daemonize) printf( "POW[%i]:        [%3dV]  P1[%10d]W   P2[%10d]W   P3[%10d]W     PA[%10d]W     TOTAL[%10u]W\n", pipe, pwr->voltage, pwr->realPower_CT1, pwr->realPower_CT2, pwr->realPower_CT3, pwr->realPower_CT4, pwr->realPower_CT1+pwr->realPower_CT2+pwr->realPower_CT3+pwr->realPower_CT4);
 
-    if ( now - p_ts > 9) {
+    if ( pipe == PIPE_SNS && now - p_ts > 9) {
       p_ts = now;
       
       if ( ph <= 0) ph = open( "/var/run/emon", O_WRONLY | O_NONBLOCK);
       if ( ph > 0) {
           sprintf( buffer, "%i %d %d %d %d %d %d\n", 5, pwr->timestamp, pwr->voltage, pwr->realPower_CT1, pwr->realPower_CT2, pwr->realPower_CT3, pwr->realPower_CT4);
           if ( -1 == write( ph, buffer, strlen( buffer))) ph = -1;
+      } else {
+        syslog( LOG_NOTICE, "POW:        [%3dV]  P1[%10d]W   P2[%10d]W   P3[%10d]W     PA[%10d]W     TOTAL[%10u]W\n", pwr->voltage, pwr->realPower_CT1, pwr->realPower_CT2, pwr->realPower_CT3, pwr->realPower_CT4, pwr->realPower_CT1+pwr->realPower_CT2+pwr->realPower_CT3+pwr->realPower_CT4);
       }
     }
 }
@@ -213,11 +217,17 @@ int main(int argc, char** argv)
     radio.setAutoAck(1);                     // Ensure autoACK is enabled
     radio.enableAckPayload();
     radio.enableDynamicPayloads();
-    radio.setRetries( 2,15); // Optionally, increase the delay between retries & # of retries
+    radio.setRetries( 2, 10); // Optionally, increase the delay between retries & # of retries
     radio.setCRCLength( RF24_CRC_16);
 
-    radio.openWritingPipe( pipes[0]);
+    radio.openWritingPipe( pipes[2]);
+
+    radio.openReadingPipe( 0, pipes[0]);
     radio.openReadingPipe( 1, pipes[1]);
+    radio.openReadingPipe( 2, pipes[2]);
+    radio.openReadingPipe( 3, pipes[3]);
+    radio.openReadingPipe( 4, pipes[4]);
+    radio.openReadingPipe( 5, pipes[5]);
           
     // Get into standby mode
     radio.startListening();
@@ -243,7 +253,7 @@ int main(int argc, char** argv)
 
     tbuf[0] = OEM_TIMESTAMP;
     memcpy( &tbuf[1], &cclock, sizeof( cclock));
-    radio.writeAckPayload( 0, &tbuf, sizeof( cclock)+1);
+    radio.writeAckPayload( 1, &tbuf, sizeof( cclock)+1);
       
     // forever loop
     while( keep_running) {
@@ -253,8 +263,10 @@ int main(int argc, char** argv)
       cclock = time( 0); 
       
       if( radio.available( &pipe)){
+      
         uint8_t psize = radio.getDynamicPayloadSize();
 
+        
   //      if ( ! daemonize) printf( "pipe: [%04x] #%i\n", pipe, psize);
         
         if( psize < 1){
@@ -264,6 +276,11 @@ int main(int argc, char** argv)
           continue;
         }
         radio.read( &rbuf, psize);
+
+        if ( pipe != PIPE_SNS) {
+          if ( !daemonize) printf( "RX[%i] [%i #%i]\n", pipe, rbuf[0], psize);
+//          continue;
+        }
   /*      
         printf( "packet: [%02x] #%i\n", rx_buffer.packet_type, psize);
 
@@ -275,32 +292,39 @@ int main(int argc, char** argv)
         switch( rbuf[0]) {
           case OEM_POWER:
             memcpy( &( oem.power), &rbuf[1], sizeof( oem_power));
-            updatePower( &( oem.power));
+            updatePower( pipe, &( oem.power));
           break;
           
           case OEM_ENERGY:
             memcpy( &( oem.energy), &rbuf[1], sizeof( oem_energy));
-            updateEnergy( &( oem.energy));
+            updateEnergy( pipe, &( oem.energy));
           break;
           
           case OEM_TIMESTAMP:
             long ts;
             memcpy( &ts, &rbuf[1], sizeof( ts));
-            syslog( LOG_INFO, "TS  #[ %ld ]\n", ts);
+            syslog( LOG_INFO, "TS[%i]  #[ %ld ]\n", pipe, ts);
           break;
           
           case OEM_NOP:
-            syslog( LOG_INFO, "NOP\n");
+            syslog( LOG_INFO, "NOP[%i]\n", pipe);
           break;
           
           default:
-            syslog( LOG_INFO, "PCK[ %02x ] #[ %i ]\n", rbuf[0], psize);
+            syslog( LOG_INFO, "PCK[%i] [ %02x ] #[ %i ]\n", pipe, rbuf[0], psize);
         }
 
         tbuf[0] = OEM_TIMESTAMP;
         memcpy( &tbuf[1], &cclock, sizeof( cclock));
         radio.writeAckPayload( pipe, &tbuf, sizeof( cclock)+1);
         aclock = cclock;
+
+        // echo out measurement data on display channel
+        radio.stopListening();
+        radio.writeFast( &rbuf, psize);
+//        radio.txStandBy( 10);
+        radio.startListening();
+
       } else {
         i++;
       }
@@ -308,8 +332,8 @@ int main(int argc, char** argv)
       if ( cclock - 30 >= aclock) {
         strftime( s, 60, "---: %a, %e. %B %Y, %T %Z", localtime( &cclock));
 
-        if ( daemonize)  syslog( LOG_INFO, "%s [%ld] [%i]", s, cclock, i);
-        else printf( "%s [%ld] [%i]\n", s, cclock, i);
+        if ( daemonize) syslog( LOG_INFO, "%s [%ld] [%i]", s, cclock, i);
+        else printf( "TIME: %s [%ld] [%i]\n", s, cclock, i);
 
         aclock = cclock;
         break;
